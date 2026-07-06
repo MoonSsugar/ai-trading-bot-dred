@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from app.keyboards.admin import AMOUNTS, amounts_keyboard, admin_main_menu
 from app.sql.repo import Repo
@@ -24,4 +24,6 @@ async def create_key(message: Message, state: FSMContext, repo: Repo):
     await repo.key.create_key(key=key, amount=amount)
 
     await state.clear()
-    await message.answer(f"Ключ на {amount}£:\n{key}")
+    await message.answer(
+        f"Ключ на {amount}£:\n{key}", reply_markup=ReplyKeyboardRemove()
+    )
