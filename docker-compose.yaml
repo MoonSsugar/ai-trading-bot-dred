@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ai_trading_bot_dred_local_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: ai_trading_bot_dred
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    container_name: ai_trading_bot_dred_local_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  db_data:
