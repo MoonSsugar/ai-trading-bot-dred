@@ -33,7 +33,7 @@ class UserRepository(BaseRepository):
         await self.session.execute(stmt)
         await self.session.commit()
 
-    async def mark_session_used(self, user_id: int) -> None:
-        stmt = update(User).where(User.id == user_id).values(session_used=True)
+    async def mark_session_used(self, user_id: int, is_used: bool = True) -> None:
+        stmt = update(User).where(User.id == user_id).values(session_used=is_used)
         await self.session.execute(stmt)
         await self.session.commit()
