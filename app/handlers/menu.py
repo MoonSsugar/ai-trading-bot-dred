@@ -3,7 +3,7 @@ import asyncio
 from aiogram import Router, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, FSInputFile, Message, ReplyKeyboardRemove
 from arq import ArqRedis
 
 from app.keyboards.user import (
@@ -14,19 +14,32 @@ from app.keyboards.user import (
     BTN_START_SESSION,
     BTN_START_TRADING,
     BTN_WITHDRAW,
+    BTN_WITHDRAW_CONFIRM,
+    CB_SUSPENDED_CLOSE,
+    CB_SUSPENDED_HELP,
+    CB_SUSPENDED_HISTORY,
+    CB_SUSPENDED_WITHDRAW,
     back_kb,
     confirm_withdraw_kb,
     post_session_kb,
+    suspended_back_kb,
+    suspended_menu_kb,
 )
 from app.menu import (
     HISTORY,
     MAIN_MENU,
     SESSION,
     WITHDRAW,
+    WITHDRAW_COMMISSION_IMAGE,
     WITHDRAW_PROMPTS,
+    WITHDRAW_REQUEST_RECEIVED,
+    WITHDRAW_STATUS_STEPS,
     confirm_withdraw_text,
     go_back,
     show_screen,
+    trade_history_text,
+    withdraw_blocked_text,
+    withdraw_suspended_text,
 )
 from app.services.scheduler.tasks.message import DEAL_START_DELAYS
 from app.sql.repo import Repo
@@ -141,6 +154,71 @@ async def withdraw_confirm_back(message: Message, state: FSMContext, repo: Repo)
     method = data.get("withdraw_method", "IBAN")
     await state.set_state(Withdraw.address)
     await message.answer(WITHDRAW_PROMPTS[method], reply_markup=back_kb())
+
+
+@router.message(Withdraw.confirm, F.text == BTN_WITHDRAW_CONFIRM)
+async def withdraw_confirm_submit(message: Message, state: FSMContext, repo: Repo):
+    # The withdrawal flow ends here; clear the input state.
+    await state.set_state(None)
+
+    user = await repo.user.get_user_by_id(message.from_user.id)  # type: ignore
+    amount = user.amount if user and user.amount else 80
+
+    # A message carrying ReplyKeyboardRemove can't be edited, so send it, wait,
+    # delete it, then send a fresh message we can edit through the status steps.
+    received = await message.answer(
+        WITHDRAW_REQUEST_RECEIVED, reply_markup=ReplyKeyboardRemove()
+    )
+    await asyncio.sleep(5)
+    await received.delete()
+
+    status = await message.answer(WITHDRAW_STATUS_STEPS[0])
+    for step in WITHDRAW_STATUS_STEPS[1:]:
+        await asyncio.sleep(5)
+        await status.edit_text(step)
+
+    # Finally, the reserve-fee suspension image with its plan-specific caption
+    # and the inline menu (Contact Manager / History / Withdraw / Help).
+    await asyncio.sleep(5)
+    image_path = WITHDRAW_COMMISSION_IMAGE.get(amount, WITHDRAW_COMMISSION_IMAGE[1000])
+    await message.answer_photo(
+        FSInputFile(image_path, filename="commission.jpg"),
+        caption=withdraw_suspended_text(amount),
+        reply_markup=suspended_menu_kb(),
+    )
+
+
+@router.callback_query(F.data == CB_SUSPENDED_HISTORY)
+async def suspended_history(callback: CallbackQuery, repo: Repo):
+    user = await repo.user.get_user_by_id(callback.from_user.id)
+    amount = user.amount if user and user.amount else 80
+    await callback.message.answer(  # type: ignore
+        trade_history_text(amount), reply_markup=suspended_back_kb()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == CB_SUSPENDED_WITHDRAW)
+async def suspended_withdraw(callback: CallbackQuery, repo: Repo):
+    user = await repo.user.get_user_by_id(callback.from_user.id)
+    amount = user.amount if user and user.amount else 80
+    await callback.message.answer(  # type: ignore
+        withdraw_blocked_text(amount), reply_markup=suspended_back_kb()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == CB_SUSPENDED_HELP)
+async def suspended_help(callback: CallbackQuery):
+    # No dedicated Help content yet; just acknowledge so the button doesn't hang.
+    await callback.answer()
+
+
+@router.callback_query(F.data == CB_SUSPENDED_CLOSE)
+async def suspended_close(callback: CallbackQuery):
+    # Back on a sub-screen: remove it, returning the user to the menu above.
+    await callback.message.delete()  # type: ignore
+    await callback.answer()
 
 
 @router.message(F.text == BTN_BACK, StateFilter(None))

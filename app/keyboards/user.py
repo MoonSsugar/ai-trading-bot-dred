@@ -1,11 +1,14 @@
-from aiogram.types import ReplyKeyboardMarkup
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 # Button labels (kept as constants so handlers match on the exact text).
 BTN_START_TRADING = "🚀 Start Trading Session"
 BTN_HISTORY = "📊 Trading History"
 BTN_WITHDRAW = "💸 Withdraw Funds"
 BTN_HELP = "🛟 Help"
+
+BTN_CONTACT_MANAGER = "👤 Contact Your Trading Manager"
+MANAGER_URL = "https://t.me/RobertNebulaAI"
 
 BTN_START_SESSION = "🚀 Start Session"
 BTN_BACK = "⬅️ Back"
@@ -56,6 +59,33 @@ def back_kb() -> ReplyKeyboardMarkup:
     builder.button(text=BTN_BACK)
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True)
+
+
+# Callback ids for the inline menu shown on the suspension image.
+CB_SUSPENDED_HISTORY = "wsm:history"
+CB_SUSPENDED_WITHDRAW = "wsm:withdraw"
+CB_SUSPENDED_HELP = "wsm:help"
+CB_SUSPENDED_CLOSE = "wsm:close"
+
+
+def suspended_menu_kb() -> InlineKeyboardMarkup:
+    # Inline (not reply) because "Contact Manager" must open a t.me URL, which
+    # only inline keyboards support.
+    builder = InlineKeyboardBuilder()
+    builder.button(text=BTN_CONTACT_MANAGER, url=MANAGER_URL)
+    builder.button(text=BTN_HISTORY, callback_data=CB_SUSPENDED_HISTORY)
+    builder.button(text=BTN_WITHDRAW, callback_data=CB_SUSPENDED_WITHDRAW)
+    builder.button(text=BTN_HELP, callback_data=CB_SUSPENDED_HELP)
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def suspended_back_kb() -> InlineKeyboardMarkup:
+    # Back button for the sub-screens opened from the suspension menu.
+    builder = InlineKeyboardBuilder()
+    builder.button(text=BTN_BACK, callback_data=CB_SUSPENDED_CLOSE)
+    builder.adjust(1)
+    return builder.as_markup()
 
 
 def post_session_kb() -> ReplyKeyboardMarkup:
