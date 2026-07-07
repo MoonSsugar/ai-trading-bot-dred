@@ -1,20 +1,36 @@
 import asyncio
 
 from aiogram import Router, F
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
 from arq import ArqRedis
 
 from app.keyboards.user import (
     BTN_BACK,
+    BTN_CRYPTO,
     BTN_HISTORY,
+    BTN_IBAN,
     BTN_START_SESSION,
     BTN_START_TRADING,
+    BTN_WITHDRAW,
+    back_kb,
+    confirm_withdraw_kb,
     post_session_kb,
 )
-from app.menu import HISTORY, MAIN_MENU, SESSION, go_back, show_screen
+from app.menu import (
+    HISTORY,
+    MAIN_MENU,
+    SESSION,
+    WITHDRAW,
+    WITHDRAW_PROMPTS,
+    confirm_withdraw_text,
+    go_back,
+    show_screen,
+)
 from app.services.scheduler.tasks.message import DEAL_START_DELAYS
 from app.sql.repo import Repo
+from app.states.user import Withdraw
 
 router = Router()
 
@@ -67,9 +83,70 @@ async def trading_history(message: Message, state: FSMContext, repo: Repo):
     await show_screen(message, state, repo, HISTORY, push=False)
 
 
-@router.message(F.text == BTN_BACK)
+@router.message(F.text == BTN_WITHDRAW)
+async def withdraw_funds(message: Message, state: FSMContext, repo: Repo):
+    # Top-level menu action: reset nav so Back returns to the main menu.
+    await state.update_data(nav_stack=[MAIN_MENU, WITHDRAW])
+    await show_screen(message, state, repo, WITHDRAW, push=False)
+
+
+async def _start_withdraw_method(
+    message: Message, state: FSMContext, method: str
+) -> None:
+    # Shared entry for both methods: remember the choice and ask for the address.
+    await state.update_data(withdraw_method=method)
+    await state.set_state(Withdraw.address)
+    await message.answer(WITHDRAW_PROMPTS[method], reply_markup=back_kb())
+
+
+@router.message(F.text == BTN_IBAN)
+async def withdraw_iban_start(message: Message, state: FSMContext, repo: Repo):
+    await _start_withdraw_method(message, state, "IBAN")
+
+
+@router.message(F.text == BTN_CRYPTO)
+async def withdraw_crypto_start(message: Message, state: FSMContext, repo: Repo):
+    await _start_withdraw_method(message, state, "CRYPTO")
+
+
+@router.message(Withdraw.address, F.text == BTN_BACK)
+async def withdraw_address_back(message: Message, state: FSMContext, repo: Repo):
+    # Back from the address prompt returns to the withdrawal-method screen.
+    await state.set_state(None)
+    await state.update_data(nav_stack=[MAIN_MENU, WITHDRAW])
+    await show_screen(message, state, repo, WITHDRAW, push=False)
+
+
+@router.message(Withdraw.address, F.text)
+async def withdraw_address_received(message: Message, state: FSMContext, repo: Repo):
+    # Save the entered destination and show the confirmation screen.
+    destination = message.text.strip()  # type: ignore
+    data = await state.get_data()
+    method = data.get("withdraw_method", "IBAN")
+    await state.update_data(withdraw_destination=destination)
+    await state.set_state(Withdraw.confirm)
+
+    user = await repo.user.get_user_by_id(message.from_user.id)  # type: ignore
+    amount = user.amount if user and user.amount else 80
+    await message.answer(
+        confirm_withdraw_text(amount, method, destination),
+        reply_markup=confirm_withdraw_kb(),
+    )
+
+
+@router.message(Withdraw.confirm, F.text == BTN_BACK)
+async def withdraw_confirm_back(message: Message, state: FSMContext, repo: Repo):
+    # Back from the confirmation screen returns to the address prompt.
+    data = await state.get_data()
+    method = data.get("withdraw_method", "IBAN")
+    await state.set_state(Withdraw.address)
+    await message.answer(WITHDRAW_PROMPTS[method], reply_markup=back_kb())
+
+
+@router.message(F.text == BTN_BACK, StateFilter(None))
 async def back(message: Message, state: FSMContext, repo: Repo):
     # One handler for every Back button: pops one screen off the nav stack.
+    # Skipped while an input flow (e.g. withdrawal) owns Back via its own state.
     await go_back(message, state, repo)
 
 

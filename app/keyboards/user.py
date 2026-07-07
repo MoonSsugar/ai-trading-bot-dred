@@ -10,6 +10,11 @@ BTN_HELP = "🛟 Help"
 BTN_START_SESSION = "🚀 Start Session"
 BTN_BACK = "⬅️ Back"
 
+BTN_IBAN = "🏦  IBAN"
+BTN_CRYPTO = "🌐 Crypto"
+
+BTN_WITHDRAW_CONFIRM = "✅ Withdraw funds"
+
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
@@ -24,6 +29,23 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
 def session_kb() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.button(text=BTN_START_SESSION)
+    builder.button(text=BTN_BACK)
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)
+
+
+def withdraw_method_kb() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=BTN_IBAN)
+    builder.button(text=BTN_CRYPTO)
+    builder.button(text=BTN_BACK)
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)
+
+
+def confirm_withdraw_kb() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=BTN_WITHDRAW_CONFIRM)
     builder.button(text=BTN_BACK)
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True)

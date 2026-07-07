@@ -10,13 +10,20 @@ no matter how many screens exist.
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from app.keyboards.user import back_kb, main_menu_kb, post_session_kb, session_kb
+from app.keyboards.user import (
+    back_kb,
+    main_menu_kb,
+    post_session_kb,
+    session_kb,
+    withdraw_method_kb,
+)
 from app.sql.repo import Repo
 
 # Screen ids.
 MAIN_MENU = "main_menu"
 SESSION = "session"
 HISTORY = "history"
+WITHDRAW = "withdraw"
 
 # Maps a key amount to its (access plan, start balance) values.
 PLANS: dict[int, tuple[str, str]] = {
@@ -40,6 +47,7 @@ def account_summary(account_id: str, amount: int) -> str:
         f"Start Balance: {balance}\n"
         "Status: Active"
     )
+
 
 # Shared header for every plan; only the details block below changes.
 SESSION_HEADER = (
@@ -154,6 +162,88 @@ TRADE_HISTORY: dict[int, str] = {
 }
 
 
+# Minimum withdrawal threshold shown per plan before a session has been started.
+WITHDRAW_MIN: dict[int, str] = {
+    80: "£1,000.00",
+    150: "£2,000.00",
+    1000: "£3,500.00",
+}
+
+
+def no_withdraw_text(amount: int) -> str:
+    """Shown when the user taps Withdraw before starting a session."""
+    min_amount = WITHDRAW_MIN.get(amount, WITHDRAW_MIN[1000])
+    _, balance = PLANS.get(amount, ("Full Access", f"£{amount}.00"))
+    return (
+        "<b>Withdrawal is not available yet.</b>\n\n"
+        f"📤  Minimum withdrawal amount: <b>{min_amount}</b>\n"
+        f"💰 Your current balance: <b>{balance}</b>\n"
+        " \n"
+        "You don’t have enough funds available for withdrawal yet. "
+        "Start a trading session first to increase your available balance"
+    )
+
+
+# Balance available for withdrawal after a session — the closing figure of each
+# plan's final trade in TRADE_HISTORY.
+WITHDRAW_BALANCE: dict[int, str] = {
+    80: "£2,488.80",
+    150: "£4,987.76",
+    1000: "£15,678.42",
+}
+
+
+def withdraw_available_text(amount: int) -> str:
+    """Shown when the user taps Withdraw after a session has been used."""
+    min_amount = WITHDRAW_MIN.get(amount, WITHDRAW_MIN[1000])
+    balance = WITHDRAW_BALANCE.get(amount, WITHDRAW_BALANCE[1000])
+    # The Full Access plan skips the "funds are available" header line.
+    return (
+        f"<b>Your funds are available for withdrawal.</b>\n\n"
+        f"<b>📤  Minimum withdrawal amount: {min_amount}</b>\n"
+        f"💰 Your current balance: <b>{balance}</b>\n\n"
+        "Please choose your preferred withdrawal method below"
+    )
+
+
+# Prompt shown after the user picks the IBAN withdrawal method.
+IBAN_PROMPT_TEXT = (
+    "<b>🏦 Withdraw to IBAN</b>\n\n"
+    "Please enter your bank IBAN below\n\n"
+    "<i>Make sure the details are correct before continuing. "
+    "Incorrect bank details may delay the withdrawal process</i>"
+)
+
+# Prompt shown after the user picks the CRYPTO withdrawal method.
+CRYPTO_PROMPT_TEXT = (
+    "<b>🌐 Withdraw to CRYPTO</b>\n\n"
+    "Please enter your cryptocurrency wallet address below\n\n"
+    "<i>Make sure the wallet address and network are correct before continuing. "
+    "Incorrect crypto details may delay or prevent the withdrawal</i>"
+)
+
+# Method id -> its input prompt. Also used to know the label in the confirmation.
+WITHDRAW_PROMPTS: dict[str, str] = {
+    "IBAN": IBAN_PROMPT_TEXT,
+    "CRYPTO": CRYPTO_PROMPT_TEXT,
+}
+
+
+def confirm_withdraw_text(amount: int, method: str, destination: str) -> str:
+    """Confirmation screen shown once the user has entered their destination."""
+    balance = WITHDRAW_BALANCE.get(amount, WITHDRAW_BALANCE[1000])
+    return (
+        "<b>📤 Confirm Withdrawal</b>\n\n"
+        "You are about to withdraw your available funds.\n\n"
+        f"<b>Withdrawal Amount:</b> {balance}\n"
+        f"<b>Method:</b> {method}\n"
+        f"<b>Destination:</b> {destination}\n\n"
+        "Please confirm that all details are correct. "
+        "This action cannot be cancelled after confirmation\n\n"
+        "<i>⏳ Payment processing may take from <b>15 minutes to 3 hours</b></i>"
+    )
+
+
 async def _render_main_menu(message: Message, repo: Repo):
     user = await repo.user.get_user_by_id(message.from_user.id)  # type: ignore
     account_id = user.account_id if user and user.account_id else "—"
@@ -177,11 +267,22 @@ async def _render_history(message: Message, repo: Repo):
     return TRADE_HISTORY[amount], back_kb()
 
 
+async def _render_withdraw(message: Message, repo: Repo):
+    user = await repo.user.get_user_by_id(message.from_user.id)  # type: ignore
+    amount = user.amount if user and user.amount else 80
+    if user and user.session_used:
+        # Post-session: funds are unlocked; offer the withdrawal methods.
+        return withdraw_available_text(amount), withdraw_method_kb()
+    # Pre-session: withdrawal is locked and we show the minimum-threshold notice.
+    return no_withdraw_text(amount), back_kb()
+
+
 # Registry: screen id -> async render(message, repo) -> (text, keyboard)
 SCREENS = {
     MAIN_MENU: _render_main_menu,
     SESSION: _render_session,
     HISTORY: _render_history,
+    WITHDRAW: _render_withdraw,
 }
 
 
