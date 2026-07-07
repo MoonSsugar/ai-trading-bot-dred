@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import FSInputFile, Message
 
 from app.keyboards.user import main_menu_kb
 from app.menu import MAIN_MENU, MENU_FOOTER, account_summary
@@ -45,7 +45,10 @@ async def start_cmd(message: Message, state: FSMContext, repo: Repo):
         )
     # Expect an activation code next; only then does check_code respond.
     await state.set_state(Activation.code)
-    await message.answer(START_MESSAGE)
+    await message.answer_photo(
+        FSInputFile("assets/welcome_image", filename="welcome.png"),
+        caption=START_MESSAGE,
+    )
 
 
 @router.message(Activation.code, F.text)
