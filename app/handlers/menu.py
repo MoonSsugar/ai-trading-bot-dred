@@ -242,7 +242,7 @@ async def start_session(
 
     # Same for every plan. Remove the keyboard while the session is running.
     await message.answer(SESSION_STARTED_TEXT, reply_markup=ReplyKeyboardRemove())
-    # await asyncio.sleep(15)
+    await asyncio.sleep(15)
     await message.answer(ANALYSIS_COMPLETED_TEXT)
 
     plan = user.amount if user and user.amount in DEAL_START_DELAYS else 80
@@ -253,5 +253,5 @@ async def start_session(
         message.chat.id,
         plan,
         0,
-        _defer_by=DEAL_START_DELAYS[plan] / 1000,
+        _defer_by=DEAL_START_DELAYS[plan],
     )

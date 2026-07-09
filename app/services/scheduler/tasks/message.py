@@ -231,5 +231,5 @@ async def send_deals(ctx, chat_id: int, plan: int, index: int = 0) -> None:
             chat_id,
             plan,
             next_index,
-            _defer_by=message.delay_next_in_seconds / 1000,
+            _defer_by=message.delay_next_in_seconds,
         )
